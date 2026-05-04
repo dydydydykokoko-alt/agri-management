@@ -218,7 +218,9 @@ var state = { fields:[], wts:[], mats:[], mapping:[], inv:[], diary:[] };
 var timer = { sec:0, iv:null };
 var images = [];
 var accessToken = localStorage.getItem('agri_at');
+var tokenExpiry = parseInt(localStorage.getItem('agri_at_exp')||'0');
 var tokenClient;
+var _reAuthCallback = null; // トークン期限切れ時の再試行コールバック
 
 // ============================================================
 // UI ヘルパー
@@ -269,12 +271,20 @@ window.onload = function(){
   } catch(e){ console.error(e); }
 };
 
+function isTokenValid(){
+  return accessToken && tokenExpiry && Date.now() < tokenExpiry - 60000; // 1分前に期限切れとみなす
+}
+
 function updateAuthStatus(){
   var el = document.getElementById('auth-status');
   if(!el) return;
-  if(accessToken){
-    el.innerHTML = '✅ ログイン済み';
+  if(isTokenValid()){
+    var remaining = Math.round((tokenExpiry - Date.now()) / 60000);
+    el.innerHTML = '✅ ログイン済み（有効期限: 約'+remaining+'分）';
     el.style.color = 'var(--primary)';
+  } else if(accessToken){
+    el.innerHTML = '⚠️ セッション期限切れ → 再ログインが必要です';
+    el.style.color = 'var(--warning)';
   } else {
     el.innerHTML = '⚪ 未ログイン（書き込みにはログインが必要です）';
     el.style.color = 'var(--text-muted)';
@@ -282,18 +292,20 @@ function updateAuthStatus(){
 }
 
 function initGis(){
-  if(typeof google !== 'undefined' && cfg.cid){
+  if(typeof google !== 'undefined' && cfg.cid && !tokenClient){
     try {
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: cfg.cid,
         scope: 'https://www.googleapis.com/auth/spreadsheets',
         callback: function(resp){
-          if(resp.error){ toast('ログインエラー: '+resp.error,'error'); return; }
+          if(resp.error){ toast('ログインエラー: '+resp.error,'error'); _reAuthCallback=null; return; }
           accessToken = resp.access_token;
+          tokenExpiry = Date.now() + 3600000; // 1時間
           localStorage.setItem('agri_at', accessToken);
-          toast('ログイン成功 ✅');
+          localStorage.setItem('agri_at_exp', tokenExpiry.toString());
           updateAuthStatus();
-          load();
+          if(_reAuthCallback){ var cb=_reAuthCallback; _reAuthCallback=null; cb(); }
+          else { toast('ログイン成功 ✅'); load(); }
         }
       });
     } catch(e){ console.error('GIS init error:', e); }
@@ -301,24 +313,51 @@ function initGis(){
 }
 
 function handleAuth(){
-  if(!cfg.cid){ toast('先にOAuth クライアントIDを設定して「設定保存」してください','error'); return; }
-  if(tokenClient){ tokenClient.requestAccessToken({prompt:''}); }
-  else if(typeof google !== 'undefined'){
+  requestToken(null);
+}
+
+// トークン取得（期限切れ時の自動再取得にも使用）
+function requestToken(callback){
+  _reAuthCallback = callback;
+  if(!tokenClient) initGis();
+  if(tokenClient){
+    // すでにログイン済みなら prompt なし（ユーザー操作不要で静かに更新）
+    tokenClient.requestAccessToken({ prompt: isTokenValid() ? '' : 'select_account' });
+  } else if(typeof google !== 'undefined'){
     initGis();
-    setTimeout(function(){ if(tokenClient) tokenClient.requestAccessToken({prompt:''}); }, 500);
+    setTimeout(function(){ if(tokenClient) tokenClient.requestAccessToken({ prompt:'select_account' }); }, 600);
   } else {
     toast('Google APIの読み込み中です。少し待ってから再試行してください','error');
   }
 }
 
 // ============================================================
-// 認証チェック
+// 認証チェック（期限切れ時は自動再ログイン→コールバック再実行）
 // ============================================================
 function checkCreds(){
   if(!cfg.id){ toast('マスタタブでスプレッドシートIDを設定してください','error'); return false; }
   if(!cfg.key){ toast('マスタタブでAPIキーを設定してください','error'); return false; }
-  if(!accessToken){ toast('マスタタブの「ログイン」ボタンでGoogleログインしてください','error'); return false; }
+  if(!accessToken){ toast('マスタタブの「🔑 Googleログイン」ボタンでログインしてください','error'); return false; }
   return true;
+}
+
+// APIコール時に401が返ったら自動で再認証してリトライ
+async function withAuth(fn){
+  try {
+    return await fn();
+  } catch(e){
+    if(e.message && (e.message.includes('401')||e.message.includes('UNAUTHENTICATED')||e.message.includes('invalid_grant'))){
+      toast('セッション期限切れ。自動で再ログインします...','error');
+      accessToken = null;
+      updateAuthStatus();
+      return new Promise(function(resolve, reject){
+        requestToken(function(){
+          fn().then(resolve).catch(reject);
+        });
+      });
+    }
+    throw e;
+  }
 }
 
 // ============================================================
@@ -353,51 +392,56 @@ async function fetchS(n){
 // Sheets API 書き込みヘルパー
 // ============================================================
 async function sheetsAppend(sheetName, values){
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id
-    +'/values/'+encodeURIComponent(sheetName+'!A:Z')
-    +':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
-  var r = await fetch(url, {
-    method:'POST',
-    headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
-    body: JSON.stringify({values:[values]})
+  return withAuth(async function(){
+    var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id
+      +'/values/'+encodeURIComponent(sheetName+'!A:Z')
+      +':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
+    var r = await fetch(url, {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+      body: JSON.stringify({values:[values]})
+    });
+    var d = await r.json();
+    if(!r.ok) throw new Error((d.error&&d.error.message)||('追加エラー '+(r.status)));
+    return d;
   });
-  var d = await r.json();
-  if(!r.ok) throw new Error(d.error&&d.error.message||'追加エラー');
-  return d;
 }
 
 async function sheetsWrite(sheetName, a1, values){
-  var range = encodeURIComponent(sheetName+'!'+a1);
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id
-    +'/values/'+range+'?valueInputOption=USER_ENTERED';
-  var r = await fetch(url, {
-    method:'PUT',
-    headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
-    body: JSON.stringify({values:values})
+  return withAuth(async function(){
+    var range = encodeURIComponent(sheetName+'!'+a1);
+    var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id
+      +'/values/'+range+'?valueInputOption=USER_ENTERED';
+    var r = await fetch(url, {
+      method:'PUT',
+      headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+      body: JSON.stringify({values:values})
+    });
+    var d = await r.json();
+    if(!r.ok) throw new Error((d.error&&d.error.message)||('更新エラー '+(r.status)));
+    return d;
   });
-  var d = await r.json();
-  if(!r.ok) throw new Error(d.error&&d.error.message||'更新エラー');
-  return d;
 }
 
 async function sheetsDeleteRow(sheetName, rowIndex){
-  // sheetIdを取得してから行削除
-  var mr = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id
-    +'?fields=sheets.properties&key='+cfg.key);
-  var md = await mr.json();
-  var sh = (md.sheets||[]).find(function(s){ return s.properties.title===sheetName; });
-  if(!sh) throw new Error('シート「'+sheetName+'」が見つかりません');
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id+':batchUpdate';
-  var r = await fetch(url, {
-    method:'POST',
-    headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
-    body: JSON.stringify({ requests:[{ deleteDimension:{
-      range:{ sheetId:sh.properties.sheetId, dimension:'ROWS',
-        startIndex:rowIndex-1, endIndex:rowIndex }
-    }}]})
+  return withAuth(async function(){
+    var mr = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id
+      +'?fields=sheets.properties&key='+cfg.key);
+    var md = await mr.json();
+    var sh = (md.sheets||[]).find(function(s){ return s.properties.title===sheetName; });
+    if(!sh) throw new Error('シート「'+sheetName+'」が見つかりません');
+    var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id+':batchUpdate';
+    var r = await fetch(url, {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+      body: JSON.stringify({ requests:[{ deleteDimension:{
+        range:{ sheetId:sh.properties.sheetId, dimension:'ROWS',
+          startIndex:rowIndex-1, endIndex:rowIndex }
+      }}]})
+    });
+    var d = await r.json();
+    if(!r.ok) throw new Error((d.error&&d.error.message)||('削除エラー '+(r.status)));
   });
-  var d = await r.json();
-  if(!r.ok) throw new Error(d.error&&d.error.message||'削除エラー');
 }
 
 // ============================================================
@@ -706,10 +750,10 @@ function saveCfg(){
   localStorage.setItem('agri_key', cfg.key);
   // 表示をIDだけに更新
   document.getElementById('cfg-id').value = cfg.id;
-  // OAuthクライアントを再初期化
-  tokenClient = null;
+  // GIS未初期化なら初期化（ログイン状態は維持）
   initGis();
   toast('設定を保存しました');
+  updateAuthStatus();
   load();
 }
 </script>
