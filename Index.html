@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>農業管理システム</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
+
+<style>
+/* --- オリジナルデザインと機能の完全復元 --- */
+:root {
+  --primary: #2d6a4f; --primary-light: #40916c; --primary-dark: #1b4332;
+  --secondary: #d8f3dc; --accent: #52b788;
+  --warning: #f4a261; --danger: #e63946;
+  --danger-bg: #ffe0e3; --warning-bg: #fff3e0; --ok-bg: #d8f3dc;
+  --text: #212529; --text-muted: #6c757d;
+  --bg: #f4f6f4; --white: #ffffff; --border: #dee2e6;
+  --shadow: 0 2px 10px rgba(0,0,0,0.08); --radius: 8px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
+  background: var(--bg); color: var(--text); font-size: 16px; line-height: 1.6;
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+.app-header {
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+  color: white; padding: 12px 16px; display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 1000;
+}
+.app-header h1 { font-size: 18px; font-weight: 700; }
+.tab-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 2000;
+  background: white; display: flex; border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.1); padding-bottom: env(safe-area-inset-bottom);
+}
+.tab-btn {
+  flex: 1; padding: 8px 4px; border: none; background: none; color: var(--text-muted);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: 10px; font-weight: 500; min-height: 60px; justify-content: center;
+  border-top: 3px solid transparent;
+}
+.tab-btn.active { color: var(--primary); border-top-color: var(--primary); font-weight: 700; background: #f0faf3; }
+.tab-content { display: none; padding: 12px; max-width: 900px; margin: 0 auto; }
+.tab-content.active { display: block; }
+.card { background: var(--white); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-bottom: 14px; }
+.card-title { font-size: 15px; font-weight: 700; color: var(--primary-dark); margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid var(--secondary); display: flex; align-items: center; gap: 6px; }
+.form-group { margin-bottom: 18px; }
+.form-label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 15px; }
+.form-control { width: 100%; padding: 12px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 16px; background: white; -webkit-appearance: none; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 500px) { .grid-2 { grid-template-columns: 1fr; } }
+.btn {
+  padding: 12px 18px; border: none; border-radius: 8px; cursor: pointer;
+  font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px;
+}
+.btn-primary { background: var(--primary); color: white; }
+.btn-secondary { background: var(--secondary); color: var(--primary-dark); border: 1px solid var(--accent); }
+.btn-danger { background: var(--danger); color: white; }
+.btn-success { background: #38b000; color: white; }
+.check-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.check-item {
+  display: inline-flex; align-items: center; gap: 8px; padding: 12px 16px;
+  border: 1.5px solid var(--border); border-radius: 22px; cursor: pointer; font-size: 16px;
+}
+.check-item.checked { background: var(--secondary); border-color: var(--primary); font-weight: 600; }
+.timer-wrap { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px; background: var(--bg); border-radius: var(--radius); border: 1.5px solid var(--border); }
+.timer-display { font-size: 34px; font-weight: 700; color: var(--primary); font-family: monospace; }
+.mat-usage-section { border: 1.5px solid var(--border); border-radius: var(--radius); padding: 12px; background: #fafff9; }
+.mat-usage-row { display: grid; grid-template-columns: 1fr 100px 40px; gap: 5px; align-items: center; margin-bottom: 5px; background:white; padding:8px; border-radius:6px; border:1px solid var(--border); }
+.img-upload-area { border: 2px dashed var(--border); border-radius: var(--radius); padding: 16px; text-align: center; background: #fafff9; }
+.img-previews { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.img-preview-item { position: relative; }
+.img-preview-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; }
+.img-remove { position: absolute; top: -5px; right: -5px; background: var(--danger); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-weight: bold; cursor: pointer; }
+.inv-table { width: 100%; border-collapse: collapse; }
+.inv-table th { background: var(--primary); color: white; padding: 10px; text-align: left; font-size: 12px; }
+.inv-table td { padding: 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.row-low td { background: var(--danger-bg); }
+.loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 9000; }
+.loading-box { background: white; padding: 20px 40px; border-radius: 12px; font-weight: 700; }
+.master-tabs { display: flex; overflow-x: auto; gap: 5px; margin-bottom: 15px; padding-bottom: 5px; }
+.m-tab-btn { padding: 8px 14px; border-radius: 20px; border: 1px solid var(--border); background: white; white-space: nowrap; font-size: 13px; }
+.m-tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); font-weight: 700; }
+.m-list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--border); }
+.btn-sm { padding: 8px 14px; font-size: 13px; min-height: 42px; border-radius: 6px; }
+.diary-card { background: white; border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); margin-bottom: 10px; border-left: 4px solid var(--primary); }
+.diary-card b { color: var(--primary-dark); font-size: 15px; }
+.diary-card small { color: var(--text-muted); font-size: 12px; }
+.toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); padding:12px 22px; border-radius:8px; color:#fff; font-size:14px; font-weight:600; z-index:9999; box-shadow:0 4px 16px rgba(0,0,0,.2); white-space:nowrap; }
+.no-data { text-align:center; padding:24px; color:var(--text-muted); font-size:13px; }
+</style>
+</head>
+<body>
+
+<div id="loading" class="loading-overlay"><div class="loading-box">⏳ 処理中...</div></div>
+
+<header class="app-header">
+  <span style="font-size:24px">🌾</span>
+  <h1>農業管理システム</h1>
+</header>
+
+<nav class="tab-nav">
+  <button class="tab-btn active" id="nav-diary" onclick="switchTab('diary')"><span style="font-size:22px">📋</span><span>作業日報</span></button>
+  <button class="tab-btn" id="nav-inventory" onclick="switchTab('inventory')"><span style="font-size:22px">📦</span><span>在庫</span></button>
+  <button class="tab-btn" id="nav-add" onclick="switchTab('add')"><span style="font-size:22px">➕</span><span>資材追加</span></button>
+  <button class="tab-btn" id="nav-master" onclick="switchTab('master')"><span style="font-size:22px">⚙️</span><span>マスタ</span></button>
+</nav>
+
+<!-- 作業日報 -->
+<div id="tab-diary" class="tab-content active">
+  <div class="card">
+    <div class="card-title">📝 日報入力</div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">作業日</label><input type="date" id="d-date" class="form-control"></div>
+      <div class="form-group"><label class="form-label">圃場</label><select id="d-field" class="form-control"></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">作業内容（複数選択可）</label><div id="d-wt-list" class="check-group"></div></div>
+    <div id="mat-section" class="form-group" style="display:none">
+      <label class="form-label">使用資材と量</label>
+      <div class="mat-usage-section"><div id="d-mats"></div></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">作業時間</label>
+      <div class="timer-wrap">
+        <button class="btn btn-success" id="timer-start" onclick="startTimer()">▶ 開始</button>
+        <div class="timer-display" id="timer-val">00:00:00</div>
+        <button class="btn btn-danger" id="timer-stop" onclick="stopTimer()" disabled>⏹ 終了</button>
+      </div>
+      <div class="grid-2" style="margin-top:8px">
+        <input type="time" id="t-start" class="form-control">
+        <input type="time" id="t-end" class="form-control">
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">備考</label><textarea id="d-notes" class="form-control"></textarea></div>
+    <div class="form-group">
+      <label class="form-label">📷 写真撮影</label>
+      <div class="img-upload-area">
+        <button class="btn btn-secondary" onclick="document.getElementById('camera-f').click()">📷 撮影</button>
+        <div class="img-previews" id="img-pre"></div>
+      </div>
+      <input type="file" id="camera-f" accept="image/*" capture="environment" style="display:none" onchange="onFile(this)">
+    </div>
+    <div class="btn-group" style="display:flex;gap:10px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveDiary()">💾 保存</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="resetDiary()">🔄 リセット</button>
+    </div>
+  </div>
+  <div id="diary-history"></div>
+</div>
+
+<!-- 在庫 -->
+<div id="tab-inventory" class="tab-content">
+  <div class="card">
+    <div class="card-title">📦 現在庫状況</div>
+    <table class="inv-table"><thead><tr><th>資材名</th><th>在庫</th><th>最低</th><th>状態</th></tr></thead><tbody id="inv-body"></tbody></table>
+  </div>
+</div>
+
+<!-- 資材追加 -->
+<div id="tab-add" class="tab-content">
+  <div class="card">
+    <div class="card-title">➕ 入庫登録</div>
+    <div class="form-group"><label class="form-label">日付</label><input type="date" id="a-date" class="form-control"></div>
+    <div class="form-group"><label class="form-label">資材</label><select id="a-mat" class="form-control"></select></div>
+    <div class="form-group"><label class="form-label">数量</label><input type="number" id="a-amt" class="form-control"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveAdd()">💾 登録</button>
+  </div>
+</div>
+
+<!-- マスタ -->
+<div id="tab-master" class="tab-content">
+  <div class="card">
+    <div class="card-title">⚙️ 連携設定</div>
+    <div class="form-group">
+      <label class="form-label">スプレッドシートID <span style="font-weight:400;font-size:12px;color:var(--text-muted)">（URLをそのまま貼ってもOK）</span></label>
+      <input type="text" id="cfg-id" class="form-control" placeholder="スプレッドシートのIDまたはURL">
+    </div>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">APIキー</label><input type="password" id="cfg-key" class="form-control" placeholder="Google APIキー"></div>
+      <div class="form-group"><label class="form-label">OAuth クライアントID</label><input type="text" id="cfg-cid" class="form-control" placeholder="〇〇.apps.googleusercontent.com"></div>
+    </div>
+    <details style="margin-bottom:14px">
+      <summary style="cursor:pointer;font-size:13px;color:var(--text-muted);padding:6px 0">⚠️ OAuth クライアントIDの設定方法</summary>
+      <div style="font-size:12px;color:var(--text-muted);padding:8px;background:var(--bg);border-radius:6px;margin-top:6px;line-height:1.8">
+        1. <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--primary)">Google Cloud Console → 認証情報</a> を開く<br>
+        2. 「認証情報を作成」→「OAuth 2.0 クライアントID」→「ウェブアプリケーション」<br>
+        3. 「承認済みのJavaScript生成元」に <code style="background:#eee;padding:2px 4px;border-radius:3px">null</code> または このページのURLを追加<br>
+        4. 作成されたクライアントIDをここに貼り付けて「設定保存」
+      </div>
+    </details>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveCfg()">設定保存</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="handleAuth()">🔑 Googleログイン</button>
+    </div>
+    <div id="auth-status" style="margin-top:10px;font-size:13px;color:var(--text-muted);text-align:center"></div>
+  </div>
+  <div class="master-tabs">
+    <button class="m-tab-btn active" onclick="switchMTab('m-f',this)">圃場</button>
+    <button class="m-tab-btn" onclick="switchMTab('m-w',this)">作業</button>
+    <button class="m-tab-btn" onclick="switchMTab('m-m',this)">資材</button>
+    <button class="m-tab-btn" onclick="switchMTab('m-map',this)">紐付</button>
+  </div>
+  <div id="m-f" class="m-tab-content">
+    <div class="card"><div style="display:flex;gap:5px;margin-bottom:10px"><input type="text" id="new-f" class="form-control" placeholder="圃場名"><button class="btn btn-primary btn-sm" onclick="addM('圃場','new-f')">追加</button></div><div id="list-f"></div></div>
+  </div>
+  <div id="m-w" class="m-tab-content" style="display:none">
+    <div class="card"><div style="display:flex;gap:5px;margin-bottom:10px"><input type="text" id="new-w" class="form-control" placeholder="作業名"><button class="btn btn-primary btn-sm" onclick="addM('作業内容','new-w')">追加</button></div><div id="list-w"></div></div>
+  </div>
+  <div id="m-m" class="m-tab-content" style="display:none">
+    <div class="card"><div style="display:flex;gap:5px;margin-bottom:10px"><input type="text" id="new-m" class="form-control" placeholder="資材名"><button class="btn btn-primary btn-sm" onclick="addM('資材マスタ','new-m')">追加</button></div><div id="list-m"></div></div>
+  </div>
+  <div id="m-map" class="m-tab-content" style="display:none">
+    <div class="card"><div id="list-map"></div></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 設定・状態
+// ============================================================
+var cfg = { id:'', key:'', cid:'' };
+var state = { fields:[], wts:[], mats:[], mapping:[], inv:[], diary:[] };
+var timer = { sec:0, iv:null };
+var images = [];
+var accessToken = localStorage.getItem('agri_at');
+var tokenClient;
+
+// ============================================================
+// UI ヘルパー
+// ============================================================
+function showLoad(){ document.getElementById('loading').style.display='flex'; }
+function hideLoad(){ document.getElementById('loading').style.display='none'; }
+
+var _toastEl = null;
+function toast(msg, type){
+  if(_toastEl){ _toastEl.remove(); _toastEl=null; }
+  _toastEl = document.createElement('div');
+  _toastEl.className = 'toast';
+  _toastEl.style.background = (type==='error') ? '#e63946' : '#2d6a4f';
+  _toastEl.textContent = msg;
+  document.body.appendChild(_toastEl);
+  setTimeout(function(){ if(_toastEl){ _toastEl.remove(); _toastEl=null; } }, 3500);
+}
+
+function switchTab(id){
+  document.querySelectorAll('.tab-content').forEach(function(c){ c.classList.remove('active'); });
+  document.querySelectorAll('.tab-nav .tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  document.getElementById('tab-'+id).classList.add('active');
+  document.getElementById('nav-'+id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function switchMTab(id, el){
+  document.querySelectorAll('.m-tab-content').forEach(function(c){ c.style.display='none'; });
+  document.querySelectorAll('.m-tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  document.getElementById(id).style.display='block';
+  el.classList.add('active');
+}
+
+// ============================================================
+// 初期化
+// ============================================================
+window.onload = function(){
+  try {
+    cfg.id  = localStorage.getItem('agri_id')  || '';
+    cfg.key = localStorage.getItem('agri_key') || '';
+    cfg.cid = localStorage.getItem('agri_cid') || '';
+    document.getElementById('cfg-id').value  = cfg.id;
+    document.getElementById('cfg-key').value = cfg.key;
+    document.getElementById('cfg-cid').value = cfg.cid;
+    document.getElementById('d-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('a-date').value = new Date().toISOString().split('T')[0];
+    updateAuthStatus();
+    initGis();
+    load();
+  } catch(e){ console.error(e); }
+};
+
+function updateAuthStatus(){
+  var el = document.getElementById('auth-status');
+  if(!el) return;
+  if(accessToken){
+    el.innerHTML = '✅ ログイン済み';
+    el.style.color = 'var(--primary)';
+  } else {
+    el.innerHTML = '⚪ 未ログイン（書き込みにはログインが必要です）';
+    el.style.color = 'var(--text-muted)';
+  }
+}
+
+function initGis(){
+  if(typeof google !== 'undefined' && cfg.cid){
+    try {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: cfg.cid,
+        scope: 'https://www.googleapis.com/auth/spreadsheets',
+        callback: function(resp){
+          if(resp.error){ toast('ログインエラー: '+resp.error,'error'); return; }
+          accessToken = resp.access_token;
+          localStorage.setItem('agri_at', accessToken);
+          toast('ログイン成功 ✅');
+          updateAuthStatus();
+          load();
+        }
+      });
+    } catch(e){ console.error('GIS init error:', e); }
+  }
+}
+
+function handleAuth(){
+  if(!cfg.cid){ toast('先にOAuth クライアントIDを設定して「設定保存」してください','error'); return; }
+  if(tokenClient){ tokenClient.requestAccessToken({prompt:''}); }
+  else if(typeof google !== 'undefined'){
+    initGis();
+    setTimeout(function(){ if(tokenClient) tokenClient.requestAccessToken({prompt:''}); }, 500);
+  } else {
+    toast('Google APIの読み込み中です。少し待ってから再試行してください','error');
+  }
+}
+
+// ============================================================
+// 認証チェック
+// ============================================================
+function checkCreds(){
+  if(!cfg.id){ toast('マスタタブでスプレッドシートIDを設定してください','error'); return false; }
+  if(!cfg.key){ toast('マスタタブでAPIキーを設定してください','error'); return false; }
+  if(!accessToken){ toast('マスタタブの「ログイン」ボタンでGoogleログインしてください','error'); return false; }
+  return true;
+}
+
+// ============================================================
+// データ読み込み
+// ============================================================
+async function load(){
+  if(!cfg.id || !cfg.key){ renderEmpty(); return; }
+  showLoad();
+  try {
+    var sheets = ['圃場','作業内容','資材マスタ','作業内容_資材','在庫','作業日報'];
+    var res = await Promise.all(sheets.map(fetchS));
+    state.fields=res[0]; state.wts=res[1]; state.mats=res[2];
+    state.mapping=res[3]; state.inv=res[4]; state.diary=res[5];
+    render();
+  } catch(e){
+    toast('データ読み込みエラー: '+e.message, 'error');
+    console.error(e);
+  }
+  hideLoad();
+}
+
+async function fetchS(n){
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id
+    +'/values/'+encodeURIComponent(n)+'!A2:Z?key='+cfg.key;
+  var r = await fetch(url);
+  if(!r.ok){ var d=await r.json(); throw new Error(d.error&&d.error.message||'シート読込失敗: '+n); }
+  var d = await r.json();
+  return d.values || [];
+}
+
+// ============================================================
+// Sheets API 書き込みヘルパー
+// ============================================================
+async function sheetsAppend(sheetName, values){
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id
+    +'/values/'+encodeURIComponent(sheetName+'!A:Z')
+    +':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS';
+  var r = await fetch(url, {
+    method:'POST',
+    headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+    body: JSON.stringify({values:[values]})
+  });
+  var d = await r.json();
+  if(!r.ok) throw new Error(d.error&&d.error.message||'追加エラー');
+  return d;
+}
+
+async function sheetsWrite(sheetName, a1, values){
+  var range = encodeURIComponent(sheetName+'!'+a1);
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id
+    +'/values/'+range+'?valueInputOption=USER_ENTERED';
+  var r = await fetch(url, {
+    method:'PUT',
+    headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+    body: JSON.stringify({values:values})
+  });
+  var d = await r.json();
+  if(!r.ok) throw new Error(d.error&&d.error.message||'更新エラー');
+  return d;
+}
+
+async function sheetsDeleteRow(sheetName, rowIndex){
+  // sheetIdを取得してから行削除
+  var mr = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id
+    +'?fields=sheets.properties&key='+cfg.key);
+  var md = await mr.json();
+  var sh = (md.sheets||[]).find(function(s){ return s.properties.title===sheetName; });
+  if(!sh) throw new Error('シート「'+sheetName+'」が見つかりません');
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/'+cfg.id+':batchUpdate';
+  var r = await fetch(url, {
+    method:'POST',
+    headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+    body: JSON.stringify({ requests:[{ deleteDimension:{
+      range:{ sheetId:sh.properties.sheetId, dimension:'ROWS',
+        startIndex:rowIndex-1, endIndex:rowIndex }
+    }}]})
+  });
+  var d = await r.json();
+  if(!r.ok) throw new Error(d.error&&d.error.message||'削除エラー');
+}
+
+// ============================================================
+// 画面描画
+// ============================================================
+function renderEmpty(){
+  var msg = '<div class="no-data">マスタタブでスプレッドシートIDとAPIキーを設定してください</div>';
+  document.getElementById('inv-body').innerHTML = '';
+  document.getElementById('diary-history').innerHTML = msg;
+}
+
+function render(){
+  // 日報フォーム
+  document.getElementById('d-field').innerHTML =
+    '<option value="">-- 圃場を選択 --</option>'+
+    state.fields.map(function(f){ return '<option value="'+f[0]+'">'+f[1]+'</option>'; }).join('');
+  document.getElementById('d-wt-list').innerHTML =
+    state.wts.map(function(w){
+      return '<label class="check-item" id="wt-l-'+w[0]+'"><input type="checkbox" value="'+w[0]+'" onchange="onWTC(this)"> '+w[1]+'</label>';
+    }).join('') || '<span style="color:var(--text-muted);font-size:13px">作業内容が登録されていません</span>';
+
+  // 資材追加タブ
+  document.getElementById('a-mat').innerHTML =
+    '<option value="">-- 資材を選択 --</option>'+
+    state.mats.map(function(m){ return '<option value="'+m[0]+'">'+m[1]+'</option>'; }).join('');
+
+  // 在庫タブ
+  document.getElementById('inv-body').innerHTML =
+    state.inv.length===0
+      ? '<tr><td colspan="4" class="no-data">在庫データがありません</td></tr>'
+      : state.inv.map(function(i){
+          var m = state.mats.find(function(mat){ return mat[0]===i[0]; });
+          var isL = Number(i[1]) < Number(i[2]);
+          return '<tr class="'+(isL?'row-low':'')+'">'
+            +'<td>'+(m?m[1]:'不明')+'</td>'
+            +'<td>'+i[1]+'</td><td>'+i[2]+'</td>'
+            +'<td>'+(isL?'⚠ 不足':'✓ OK')+'</td></tr>';
+        }).join('');
+
+  // 日報履歴
+  var diaryHtml = state.diary.slice().reverse().map(function(d){
+    return '<div class="diary-card">'
+      +'<b>'+escH(d[1]||'')+'</b> &nbsp;'
+      +(d[8]?escH(d[8]):'') // fieldName
+      +(d[9]?' / '+escH(d[9]):'') // wtNames
+      +(d[6]?' / '+d[6]+'分':'')
+      +(d[7]?'<br><small>📝 '+escH(d[7])+'</small>':'')
+      +'</div>';
+  }).join('');
+  document.getElementById('diary-history').innerHTML = diaryHtml ||
+    '<div class="no-data">日報がありません</div>';
+
+  // マスタ
+  document.getElementById('list-f').innerHTML =
+    state.fields.map(function(f){
+      return '<div class="m-list-item"><span>'+escH(f[1])+'</span>'
+        +'<button class="btn btn-danger btn-sm" onclick="delM(\'圃場\',\''+f[0]+'\')">削除</button></div>';
+    }).join('') || '<div class="no-data">登録なし</div>';
+  document.getElementById('list-w').innerHTML =
+    state.wts.map(function(w){
+      return '<div class="m-list-item"><span>'+escH(w[1])+'</span>'
+        +'<button class="btn btn-danger btn-sm" onclick="delM(\'作業内容\',\''+w[0]+'\')">削除</button></div>';
+    }).join('') || '<div class="no-data">登録なし</div>';
+  document.getElementById('list-m').innerHTML =
+    state.mats.map(function(m){
+      return '<div class="m-list-item"><span>'+escH(m[1])+(m[2]?' ('+escH(m[2])+')':'')+'</span>'
+        +'<button class="btn btn-danger btn-sm" onclick="delM(\'資材マスタ\',\''+m[0]+'\')">削除</button></div>';
+    }).join('') || '<div class="no-data">登録なし</div>';
+
+  // 割り当てリスト
+  document.getElementById('list-map').innerHTML =
+    state.wts.length===0 ? '<div class="no-data">作業内容を先に登録してください</div>'
+    : state.wts.map(function(w){
+        var mapped = state.mapping.filter(function(m){ return m[0]===w[0]; });
+        var matNames = mapped.map(function(m){
+          var mat = state.mats.find(function(x){ return x[0]===m[1]; });
+          return mat?mat[1]:'';
+        }).filter(Boolean).join('、');
+        return '<div class="m-list-item"><span>'+escH(w[1])+'</span>'
+          +'<span style="font-size:12px;color:var(--text-muted)">'+(matNames||'未設定')+'</span></div>';
+      }).join('');
+}
+
+function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function genId(){ return Date.now().toString(36)+Math.random().toString(36).substr(2); }
+
+// ============================================================
+// 作業内容チェック → 資材セクション表示
+// ============================================================
+function onWTC(el){
+  var l = document.getElementById('wt-l-'+el.value);
+  if(el.checked) l.classList.add('checked'); else l.classList.remove('checked');
+  var sel = Array.from(document.querySelectorAll('#d-wt-list input:checked')).map(function(i){ return i.value; });
+  var mids = new Set();
+  state.mapping.filter(function(m){ return sel.includes(m[0]); }).forEach(function(m){ mids.add(m[1]); });
+  var sec = document.getElementById('mat-section');
+  if(mids.size > 0){
+    sec.style.display='block';
+    document.getElementById('d-mats').innerHTML = Array.from(mids).map(function(id){
+      var m = state.mats.find(function(mat){ return mat[0]===id; });
+      return m ? '<div class="mat-usage-row"><span>'+escH(m[1])+'</span>'
+        +'<input type="number" class="form-control" data-id="'+id+'" placeholder="0" min="0" step="0.01">'
+        +'<span>'+escH(m[2]||'')+'</span></div>' : '';
+    }).join('');
+  } else { sec.style.display='none'; }
+}
+
+// ============================================================
+// 写真
+// ============================================================
+function onFile(inp){
+  var files = Array.from(inp.files||[]);
+  if(!files.length) return;
+  Promise.all(files.slice(0, 3-images.length).map(function(f){
+    return new Promise(function(resolve){
+      var reader = new FileReader();
+      reader.onload = function(e){ resolve(e.target.result); };
+      reader.readAsDataURL(f);
+    });
+  })).then(function(results){
+    results.forEach(function(r){ if(r) images.push(r); });
+    renderI();
+  });
+}
+function renderI(){
+  document.getElementById('img-pre').innerHTML = images.map(function(img,i){
+    return '<div class="img-preview-item"><img src="'+img+'">'
+      +'<button class="img-remove" onclick="images.splice('+i+',1);renderI()">✕</button></div>';
+  }).join('');
+}
+
+// ============================================================
+// タイマー
+// ============================================================
+function startTimer(){
+  if(timer.iv) return;
+  timer.sec=0;
+  document.getElementById('timer-start').disabled=true;
+  document.getElementById('timer-stop').disabled=false;
+  timer.iv = setInterval(function(){ timer.sec++; updateT(); }, 1000);
+}
+function stopTimer(){
+  clearInterval(timer.iv); timer.iv=null;
+  document.getElementById('timer-start').disabled=false;
+  document.getElementById('timer-stop').disabled=true;
+}
+function updateT(){
+  var h=Math.floor(timer.sec/3600), m=Math.floor((timer.sec%3600)/60), s=timer.sec%60;
+  document.getElementById('timer-val').innerText =
+    (h<10?'0'+h:h)+':'+(m<10?'0'+m:m)+':'+(s<10?'0'+s:s);
+}
+
+// ============================================================
+// 日報リセット
+// ============================================================
+function resetDiary(){
+  images=[]; renderI();
+  document.getElementById('d-notes').value='';
+  document.getElementById('d-date').value=new Date().toISOString().split('T')[0];
+  document.querySelectorAll('#d-wt-list input').forEach(function(cb){
+    cb.checked=false;
+    var l=document.getElementById('wt-l-'+cb.value); if(l) l.classList.remove('checked');
+  });
+  document.getElementById('mat-section').style.display='none';
+  timer.sec=0; updateT();
+  if(timer.iv){ clearInterval(timer.iv); timer.iv=null; }
+  document.getElementById('timer-start').disabled=false;
+  document.getElementById('timer-stop').disabled=true;
+  document.getElementById('t-start').value='';
+  document.getElementById('t-end').value='';
+}
+
+// ============================================================
+// 日報保存（★未実装だった関数①）
+// ============================================================
+async function saveDiary(){
+  if(!checkCreds()) return;
+  var date    = document.getElementById('d-date').value;
+  var fieldId = document.getElementById('d-field').value;
+  if(!date||!fieldId){ toast('日付と圃場は必須です','error'); return; }
+  var wtIds = Array.from(document.querySelectorAll('#d-wt-list input:checked')).map(function(i){ return i.value; });
+  if(!wtIds.length){ toast('作業内容を選択してください','error'); return; }
+  var sel = document.getElementById('d-field');
+  var fieldName = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+  var wtNames = wtIds.map(function(id){
+    var w=state.wts.find(function(x){return x[0]===id;}); return w?w[1]:'';
+  }).join('、');
+  var matInputs = Array.from(document.querySelectorAll('#d-mats input[data-id]'))
+    .filter(function(i){ return parseFloat(i.value)>0; });
+  var matStr = matInputs.map(function(i){ return i.getAttribute('data-id')+':'+i.value; }).join(',');
+  var startT = document.getElementById('t-start').value;
+  var endT   = document.getElementById('t-end').value;
+  var dur = timer.sec>0 ? Math.round(timer.sec/60) : '';
+  if(!dur && startT && endT){
+    var s=startT.split(':').map(Number), e=endT.split(':').map(Number);
+    dur=(e[0]*60+e[1])-(s[0]*60+s[1]); if(dur<0) dur+=1440;
+  }
+  var notes = document.getElementById('d-notes').value;
+  showLoad();
+  try {
+    await sheetsAppend('作業日報',
+      [genId(), date, fieldId, wtIds.join(','), matStr, startT, dur, notes, fieldName, wtNames]);
+    // 在庫を減算
+    if(matInputs.length){
+      var rawInv = await fetchS('在庫');
+      for(var i=0; i<matInputs.length; i++){
+        var mid = matInputs[i].getAttribute('data-id');
+        var amt = parseFloat(matInputs[i].value)||0;
+        var idx = rawInv.findIndex(function(r){ return r[0]===mid; });
+        if(idx>=0){
+          var newStock = (parseFloat(rawInv[idx][1])||0) - amt;
+          await sheetsWrite('在庫', 'B'+(idx+2), [[newStock]]);
+        }
+      }
+    }
+    await load();
+    resetDiary();
+    toast('日報を保存しました');
+  } catch(e){ toast('保存エラー: '+e.message,'error'); }
+  hideLoad();
+}
+
+// ============================================================
+// 入庫登録（★未実装だった関数②）
+// ============================================================
+async function saveAdd(){
+  if(!checkCreds()) return;
+  var date  = document.getElementById('a-date').value;
+  var matId = document.getElementById('a-mat').value;
+  var amt   = parseFloat(document.getElementById('a-amt').value)||0;
+  if(!date){ toast('日付を入力してください','error'); return; }
+  if(!matId){ toast('資材を選択してください','error'); return; }
+  if(amt<=0){ toast('数量を入力してください','error'); return; }
+  showLoad();
+  try {
+    var mat = state.mats.find(function(m){ return m[0]===matId; });
+    // 入出庫履歴へ追記（シートがなければ在庫のみ更新）
+    try { await sheetsAppend('入出庫', [genId(),date,matId,'購入',amt,0,'',mat?mat[1]:'']); }
+    catch(e2){ /* 入出庫シートがない場合はスキップ */ }
+    // 在庫を加算
+    var rawInv = await fetchS('在庫');
+    var idx = rawInv.findIndex(function(r){ return r[0]===matId; });
+    if(idx>=0){
+      var newStock = (parseFloat(rawInv[idx][1])||0) + amt;
+      await sheetsWrite('在庫', 'B'+(idx+2), [[newStock]]);
+    } else {
+      await sheetsAppend('在庫', [matId, amt, 0]);
+    }
+    await load();
+    document.getElementById('a-amt').value='';
+    toast('入庫を登録しました');
+  } catch(e){ toast('登録エラー: '+e.message,'error'); }
+  hideLoad();
+}
+
+// ============================================================
+// マスタ追加（★未実装だった関数③）
+// ============================================================
+async function addM(sheetName, inputId){
+  if(!checkCreds()) return;
+  var val = document.getElementById(inputId).value.trim();
+  if(!val){ toast('名前を入力してください','error'); return; }
+  showLoad();
+  try {
+    var id = genId();
+    await sheetsAppend(sheetName, [id, val]);
+    if(sheetName==='資材マスタ'){
+      // 在庫レコードも作成
+      try { await sheetsAppend('在庫',[id,0,0]); } catch(e2){}
+    }
+    document.getElementById(inputId).value='';
+    await load();
+    toast('追加しました');
+  } catch(e){ toast('追加エラー: '+e.message,'error'); }
+  hideLoad();
+}
+
+// ============================================================
+// マスタ削除（★未実装だった関数④）
+// ============================================================
+async function delM(sheetName, id){
+  if(!confirm('削除しますか？')) return;
+  if(!checkCreds()) return;
+  showLoad();
+  try {
+    var data = await fetchS(sheetName);
+    var idx  = data.findIndex(function(r){ return r[0]===id; });
+    if(idx<0){ toast('対象データが見つかりません','error'); hideLoad(); return; }
+    await sheetsDeleteRow(sheetName, idx+2);
+    await load();
+    toast('削除しました');
+  } catch(e){ toast('削除エラー: '+e.message,'error'); }
+  hideLoad();
+}
+
+// ============================================================
+// 設定保存
+// ============================================================
+function saveCfg(){
+  // スプレッドシートIDはURLを貼っても自動抽出
+  var raw = document.getElementById('cfg-id').value.trim();
+  var m = raw.match(/\/spreadsheets\/d\/([\w-]+)/);
+  cfg.id  = m ? m[1] : raw;
+  cfg.key = document.getElementById('cfg-key').value.trim();
+  cfg.cid = document.getElementById('cfg-cid').value.trim();
+  localStorage.setItem('agri_id',  cfg.id);
+  localStorage.setItem('agri_key', cfg.key);
+  localStorage.setItem('agri_cid', cfg.cid);
+  // 表示をIDだけに更新
+  document.getElementById('cfg-id').value = cfg.id;
+  // OAuthクライアントを再初期化
+  tokenClient = null;
+  initGis();
+  toast('設定を保存しました');
+  load();
+}
+</script>
+</body>
+</html>
