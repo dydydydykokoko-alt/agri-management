@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>農業管理システム</title>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://accounts.google.com/gsi/client" onload="onGisLoad()" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
 
 <style>
@@ -97,6 +97,19 @@ body {
 <body>
 
 <div id="loading" class="loading-overlay"><div class="loading-box">⏳ 処理中...</div></div>
+
+<!-- 自動ログインオーバーレイ -->
+<div id="login-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#1b4332,#2d6a4f);z-index:8000;flex-direction:column;align-items:center;justify-content:center;color:white;text-align:center;padding:24px">
+  <div style="font-size:56px;margin-bottom:16px">🌾</div>
+  <div style="font-size:22px;font-weight:700;margin-bottom:8px">農業管理システム</div>
+  <div id="login-msg" style="font-size:14px;opacity:0.8;margin-bottom:32px">Googleアカウントで認証しています...</div>
+  <div id="login-spinner" style="width:40px;height:40px;border:4px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 32px"></div>
+  <button id="login-btn" onclick="handleAuth()" style="display:none;background:white;color:#1b4332;border:none;border-radius:10px;padding:16px 32px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.2)">
+    🔑 Googleでログイン
+  </button>
+  <div style="font-size:12px;opacity:0.6;margin-top:24px" id="login-sub"></div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
 <header class="app-header">
   <span style="font-size:24px">🌾</span>
@@ -307,11 +320,72 @@ window.onload = function(){
     document.getElementById('cfg-key').value = cfg.key;
     document.getElementById('d-date').value = new Date().toISOString().split('T')[0];
     document.getElementById('a-date').value = new Date().toISOString().split('T')[0];
-    updateAuthStatus();
-    initGis();
-    load();
+
+    if(!cfg.id || !cfg.key){
+      // 未設定：設定画面を表示
+      showLoginOverlay('設定が必要です', true, 'マスタタブでスプレッドシートIDとAPIキーを設定してください');
+      switchTab('master');
+      hideLoginOverlay();
+    } else if(isTokenValid()){
+      // トークン有効：そのまま起動
+      hideLoginOverlay();
+      updateAuthStatus();
+      load();
+    } else {
+      // トークンなし/期限切れ：オーバーレイ表示してGIS読み込みを待つ
+      showLoginOverlay('Googleアカウントで認証しています...');
+      // GISがすでにロード済みなら即トリガー、未ロードならonGisLoadで処理
+      if(typeof google !== 'undefined' && google.accounts){
+        onGisLoad();
+      }
+      // タイムアウト：5秒でGISが来なければボタン表示
+      setTimeout(function(){
+        if(document.getElementById('login-overlay').style.display!=='none' &&
+           document.getElementById('login-btn').style.display==='none'){
+          showLoginOverlay('ログインボタンをタップしてください', true);
+        }
+      }, 5000);
+    }
   } catch(e){ console.error(e); }
 };
+
+// GISスクリプト読み込み完了コールバック
+function onGisLoad(){
+  initGis();
+  if(isTokenValid()){
+    hideLoginOverlay();
+    updateAuthStatus();
+    load();
+  } else {
+    // 自動サインイン試行（既認証ならポップアップなしで完了）
+    showLoginOverlay('Googleアカウントに接続中...');
+    if(tokenClient){
+      tokenClient.requestAccessToken({prompt:''});
+      // 3秒以内に完了しなければボタン表示
+      setTimeout(function(){
+        if(document.getElementById('login-overlay').style.display!=='none'){
+          showLoginOverlay('ログインボタンをタップしてください', true,
+            'ブラウザのポップアップ設定により自動ログインできません');
+        }
+      }, 3000);
+    } else {
+      showLoginOverlay('ログインボタンをタップしてください', true);
+    }
+  }
+}
+
+function showLoginOverlay(msg, showBtn, sub){
+  var ov = document.getElementById('login-overlay');
+  ov.style.display='flex';
+  document.getElementById('login-msg').textContent = msg||'';
+  document.getElementById('login-spinner').style.display = showBtn?'none':'block';
+  document.getElementById('login-btn').style.display = showBtn?'block':'none';
+  document.getElementById('login-sub').textContent = sub||'';
+}
+
+function hideLoginOverlay(){
+  document.getElementById('login-overlay').style.display='none';
+}
 
 function isTokenValid(){
   return accessToken && tokenExpiry && Date.now() < tokenExpiry - 60000; // 1分前に期限切れとみなす
@@ -340,11 +414,13 @@ function initGis(){
         client_id: cfg.cid,
         scope: 'https://www.googleapis.com/auth/spreadsheets',
         callback: function(resp){
-          if(resp.error){ toast('ログインエラー: '+resp.error,'error'); _reAuthCallback=null; return; }
+          if(resp.error){ toast('ログインエラー: '+resp.error,'error'); _reAuthCallback=null;
+            showLoginOverlay('ログインボタンをタップしてください', true, 'エラー: '+resp.error); return; }
           accessToken = resp.access_token;
           tokenExpiry = Date.now() + 3600000; // 1時間
           localStorage.setItem('agri_at', accessToken);
           localStorage.setItem('agri_at_exp', tokenExpiry.toString());
+          hideLoginOverlay();
           updateAuthStatus();
           if(_reAuthCallback){ var cb=_reAuthCallback; _reAuthCallback=null; cb(); }
           else { toast('ログイン成功 ✅'); load(); }
