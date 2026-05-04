@@ -179,24 +179,15 @@ body {
       <label class="form-label">スプレッドシートID <span style="font-weight:400;font-size:12px;color:var(--text-muted)">（URLをそのまま貼ってもOK）</span></label>
       <input type="text" id="cfg-id" class="form-control" placeholder="スプレッドシートのIDまたはURL">
     </div>
-    <div class="grid-2">
-      <div class="form-group"><label class="form-label">APIキー</label><input type="password" id="cfg-key" class="form-control" placeholder="Google APIキー"></div>
-      <div class="form-group"><label class="form-label">OAuth クライアントID</label><input type="text" id="cfg-cid" class="form-control" placeholder="〇〇.apps.googleusercontent.com"></div>
+    <div class="form-group">
+      <label class="form-label">APIキー</label>
+      <input type="password" id="cfg-key" class="form-control" placeholder="Google APIキー">
     </div>
-    <details style="margin-bottom:14px">
-      <summary style="cursor:pointer;font-size:13px;color:var(--text-muted);padding:6px 0">⚠️ OAuth クライアントIDの設定方法</summary>
-      <div style="font-size:12px;color:var(--text-muted);padding:8px;background:var(--bg);border-radius:6px;margin-top:6px;line-height:1.8">
-        1. <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--primary)">Google Cloud Console → 認証情報</a> を開く<br>
-        2. 「認証情報を作成」→「OAuth 2.0 クライアントID」→「ウェブアプリケーション」<br>
-        3. 「承認済みのJavaScript生成元」に <code style="background:#eee;padding:2px 4px;border-radius:3px">null</code> または このページのURLを追加<br>
-        4. 作成されたクライアントIDをここに貼り付けて「設定保存」
-      </div>
-    </details>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-primary" style="flex:1" onclick="saveCfg()">設定保存</button>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveCfg()">💾 設定保存</button>
       <button class="btn btn-secondary" style="flex:1" onclick="handleAuth()">🔑 Googleログイン</button>
     </div>
-    <div id="auth-status" style="margin-top:10px;font-size:13px;color:var(--text-muted);text-align:center"></div>
+    <div id="auth-status" style="font-size:13px;color:var(--text-muted);text-align:center;padding:6px"></div>
   </div>
   <div class="master-tabs">
     <button class="m-tab-btn active" onclick="switchMTab('m-f',this)">圃場</button>
@@ -222,7 +213,7 @@ body {
 // ============================================================
 // 設定・状態
 // ============================================================
-var cfg = { id:'', key:'', cid:'' };
+var cfg = { id:'', key:'', cid:'537512390859-n7u9s1jrtqusmh5kqr57lbs52lsqalg8.apps.googleusercontent.com' };
 var state = { fields:[], wts:[], mats:[], mapping:[], inv:[], diary:[] };
 var timer = { sec:0, iv:null };
 var images = [];
@@ -268,10 +259,8 @@ window.onload = function(){
   try {
     cfg.id  = localStorage.getItem('agri_id')  || '';
     cfg.key = localStorage.getItem('agri_key') || '';
-    cfg.cid = localStorage.getItem('agri_cid') || '';
     document.getElementById('cfg-id').value  = cfg.id;
     document.getElementById('cfg-key').value = cfg.key;
-    document.getElementById('cfg-cid').value = cfg.cid;
     document.getElementById('d-date').value = new Date().toISOString().split('T')[0];
     document.getElementById('a-date').value = new Date().toISOString().split('T')[0];
     updateAuthStatus();
@@ -713,10 +702,8 @@ function saveCfg(){
   var m = raw.match(/\/spreadsheets\/d\/([\w-]+)/);
   cfg.id  = m ? m[1] : raw;
   cfg.key = document.getElementById('cfg-key').value.trim();
-  cfg.cid = document.getElementById('cfg-cid').value.trim();
   localStorage.setItem('agri_id',  cfg.id);
   localStorage.setItem('agri_key', cfg.key);
-  localStorage.setItem('agri_cid', cfg.cid);
   // 表示をIDだけに更新
   document.getElementById('cfg-id').value = cfg.id;
   // OAuthクライアントを再初期化
