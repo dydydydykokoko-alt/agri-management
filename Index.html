@@ -196,16 +196,58 @@ body {
     <button class="m-tab-btn" onclick="switchMTab('m-map',this)">紐付</button>
   </div>
   <div id="m-f" class="m-tab-content">
-    <div class="card"><div style="display:flex;gap:5px;margin-bottom:10px"><input type="text" id="new-f" class="form-control" placeholder="圃場名"><button class="btn btn-primary btn-sm" onclick="addM('圃場','new-f')">追加</button></div><div id="list-f"></div></div>
+    <div class="card">
+      <div class="grid-2" style="margin-bottom:8px">
+        <input type="text" id="new-f" class="form-control" placeholder="圃場名">
+        <div style="display:flex;gap:5px">
+          <input type="number" id="new-f-area" class="form-control" placeholder="面積" min="0" step="0.01" style="flex:1">
+          <select id="new-f-unit" class="form-control" style="width:90px">
+            <option value="m²">m²</option>
+            <option value="アール">アール</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="width:100%" onclick="addField()">＋ 圃場を追加</button>
+      <div id="list-f" style="margin-top:10px"></div>
+    </div>
   </div>
   <div id="m-w" class="m-tab-content" style="display:none">
-    <div class="card"><div style="display:flex;gap:5px;margin-bottom:10px"><input type="text" id="new-w" class="form-control" placeholder="作業名"><button class="btn btn-primary btn-sm" onclick="addM('作業内容','new-w')">追加</button></div><div id="list-w"></div></div>
+    <div class="card">
+      <div style="display:flex;gap:5px;margin-bottom:8px">
+        <input type="text" id="new-w" class="form-control" placeholder="作業名">
+        <button class="btn btn-primary btn-sm" onclick="addM('作業内容','new-w')">追加</button>
+      </div>
+      <div id="list-w"></div>
+    </div>
   </div>
   <div id="m-m" class="m-tab-content" style="display:none">
-    <div class="card"><div style="display:flex;gap:5px;margin-bottom:10px"><input type="text" id="new-m" class="form-control" placeholder="資材名"><button class="btn btn-primary btn-sm" onclick="addM('資材マスタ','new-m')">追加</button></div><div id="list-m"></div></div>
+    <div class="card">
+      <div class="grid-2" style="margin-bottom:8px">
+        <input type="text" id="new-m" class="form-control" placeholder="資材名">
+        <input type="text" id="new-m-unit" class="form-control" placeholder="単位（例：本、袋）">
+      </div>
+      <div style="display:flex;gap:5px;margin-bottom:8px;align-items:center">
+        <input type="number" id="new-m-bag" class="form-control" placeholder="1袋の量" min="0" step="0.01" style="flex:1">
+        <span style="white-space:nowrap;color:var(--text-muted);font-size:13px">kg/袋</span>
+      </div>
+      <button class="btn btn-primary btn-sm" style="width:100%" onclick="addMat()">＋ 資材を追加</button>
+      <div id="list-m" style="margin-top:10px"></div>
+    </div>
   </div>
   <div id="m-map" class="m-tab-content" style="display:none">
     <div class="card"><div id="list-map"></div></div>
+  </div>
+</div>
+
+<!-- 編集モーダル -->
+<div id="edit-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);z-index:5000;padding:16px;overflow-y:auto">
+  <div style="background:white;border-radius:12px;padding:20px;max-width:480px;margin:60px auto;">
+    <div style="font-size:17px;font-weight:700;margin-bottom:16px;color:var(--primary-dark)" id="edit-modal-title">編集</div>
+    <div id="edit-modal-body"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveEdit()">💾 保存</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="closeEditModal()">キャンセル</button>
+    </div>
   </div>
 </div>
 
@@ -497,18 +539,37 @@ function render(){
   // マスタ
   document.getElementById('list-f').innerHTML =
     state.fields.map(function(f){
-      return '<div class="m-list-item"><span>'+escH(f[1])+'</span>'
-        +'<button class="btn btn-danger btn-sm" onclick="delM(\'圃場\',\''+f[0]+'\')">削除</button></div>';
+      var area = f[2] ? escH(f[2])+escH(f[3]||'m²') : '';
+      return '<div class="m-list-item">'
+        +'<div><div style="font-weight:600">'+escH(f[1])+'</div>'
+        +(area?'<div style="font-size:12px;color:var(--text-muted)">面積: '+area+'</div>':'')
+        +'</div>'
+        +'<div style="display:flex;gap:6px">'
+        +'<button class="btn btn-secondary btn-sm" onclick="openEdit(\'圃場\',\''+f[0]+'\')">編集</button>'
+        +'<button class="btn btn-danger btn-sm" onclick="delM(\'圃場\',\''+f[0]+'\')">削除</button>'
+        +'</div></div>';
     }).join('') || '<div class="no-data">登録なし</div>';
   document.getElementById('list-w').innerHTML =
     state.wts.map(function(w){
-      return '<div class="m-list-item"><span>'+escH(w[1])+'</span>'
-        +'<button class="btn btn-danger btn-sm" onclick="delM(\'作業内容\',\''+w[0]+'\')">削除</button></div>';
+      return '<div class="m-list-item"><span style="font-weight:600">'+escH(w[1])+'</span>'
+        +'<div style="display:flex;gap:6px">'
+        +'<button class="btn btn-secondary btn-sm" onclick="openEdit(\'作業内容\',\''+w[0]+'\')">編集</button>'
+        +'<button class="btn btn-danger btn-sm" onclick="delM(\'作業内容\',\''+w[0]+'\')">削除</button>'
+        +'</div></div>';
     }).join('') || '<div class="no-data">登録なし</div>';
   document.getElementById('list-m').innerHTML =
     state.mats.map(function(m){
-      return '<div class="m-list-item"><span>'+escH(m[1])+(m[2]?' ('+escH(m[2])+')':'')+'</span>'
-        +'<button class="btn btn-danger btn-sm" onclick="delM(\'資材マスタ\',\''+m[0]+'\')">削除</button></div>';
+      var sub = [];
+      if(m[2]) sub.push('単位: '+escH(m[2]));
+      if(m[3]) sub.push('1袋: '+escH(m[3])+'kg');
+      return '<div class="m-list-item">'
+        +'<div><div style="font-weight:600">'+escH(m[1])+'</div>'
+        +(sub.length?'<div style="font-size:12px;color:var(--text-muted)">'+sub.join(' / ')+'</div>':'')
+        +'</div>'
+        +'<div style="display:flex;gap:6px">'
+        +'<button class="btn btn-secondary btn-sm" onclick="openEdit(\'資材マスタ\',\''+m[0]+'\')">編集</button>'
+        +'<button class="btn btn-danger btn-sm" onclick="delM(\'資材マスタ\',\''+m[0]+'\')">削除</button>'
+        +'</div></div>';
     }).join('') || '<div class="no-data">登録なし</div>';
 
   // 割り当てリスト
@@ -698,7 +759,48 @@ async function saveAdd(){
 }
 
 // ============================================================
-// マスタ追加（★未実装だった関数③）
+// 圃場追加（面積・単位付き）
+// ============================================================
+async function addField(){
+  if(!checkCreds()) return;
+  var name = document.getElementById('new-f').value.trim();
+  if(!name){ toast('圃場名を入力してください','error'); return; }
+  var area = document.getElementById('new-f-area').value.trim();
+  var unit = document.getElementById('new-f-unit').value;
+  showLoad();
+  try {
+    await sheetsAppend('圃場', [genId(), name, area, area?unit:'']);
+    document.getElementById('new-f').value='';
+    document.getElementById('new-f-area').value='';
+    await load(); toast('圃場を追加しました');
+  } catch(e){ toast('追加エラー: '+e.message,'error'); }
+  hideLoad();
+}
+
+// ============================================================
+// 資材追加（単位・1袋kg付き）
+// ============================================================
+async function addMat(){
+  if(!checkCreds()) return;
+  var name = document.getElementById('new-m').value.trim();
+  if(!name){ toast('資材名を入力してください','error'); return; }
+  var unit = document.getElementById('new-m-unit').value.trim();
+  var bag  = document.getElementById('new-m-bag').value.trim();
+  showLoad();
+  try {
+    var id = genId();
+    await sheetsAppend('資材マスタ', [id, name, unit, bag]);
+    try { await sheetsAppend('在庫', [id, 0, 0]); } catch(e2){}
+    document.getElementById('new-m').value='';
+    document.getElementById('new-m-unit').value='';
+    document.getElementById('new-m-bag').value='';
+    await load(); toast('資材を追加しました');
+  } catch(e){ toast('追加エラー: '+e.message,'error'); }
+  hideLoad();
+}
+
+// ============================================================
+// マスタ追加（作業内容など）
 // ============================================================
 async function addM(sheetName, inputId){
   if(!checkCreds()) return;
@@ -706,16 +808,80 @@ async function addM(sheetName, inputId){
   if(!val){ toast('名前を入力してください','error'); return; }
   showLoad();
   try {
-    var id = genId();
-    await sheetsAppend(sheetName, [id, val]);
-    if(sheetName==='資材マスタ'){
-      // 在庫レコードも作成
-      try { await sheetsAppend('在庫',[id,0,0]); } catch(e2){}
-    }
+    await sheetsAppend(sheetName, [genId(), val]);
     document.getElementById(inputId).value='';
-    await load();
-    toast('追加しました');
+    await load(); toast('追加しました');
   } catch(e){ toast('追加エラー: '+e.message,'error'); }
+  hideLoad();
+}
+
+// ============================================================
+// マスタ編集
+// ============================================================
+var _editCtx = null;
+
+function openEdit(sheetName, id){
+  var item, fieldDefs;
+  if(sheetName==='圃場'){
+    item = state.fields.find(function(f){ return f[0]===id; });
+    if(!item) return;
+    fieldDefs = [
+      {label:'圃場名', val:item[1]||'', type:'text'},
+      {label:'面積', val:item[2]||'', type:'number'},
+      {label:'単位', val:item[3]||'m²', type:'select', options:['m²','アール']}
+    ];
+  } else if(sheetName==='作業内容'){
+    item = state.wts.find(function(w){ return w[0]===id; });
+    if(!item) return;
+    fieldDefs = [
+      {label:'作業名', val:item[1]||'', type:'text'}
+    ];
+  } else if(sheetName==='資材マスタ'){
+    item = state.mats.find(function(m){ return m[0]===id; });
+    if(!item) return;
+    fieldDefs = [
+      {label:'資材名', val:item[1]||'', type:'text'},
+      {label:'単位（例：本、袋）', val:item[2]||'', type:'text'},
+      {label:'1袋の量 (kg)', val:item[3]||'', type:'number'}
+    ];
+  } else return;
+
+  _editCtx = { sheetName:sheetName, id:id, fieldDefs:fieldDefs };
+  document.getElementById('edit-modal-title').textContent = sheetName+'を編集';
+  document.getElementById('edit-modal-body').innerHTML = fieldDefs.map(function(f,i){
+    if(f.type==='select'){
+      return '<div class="form-group"><label class="form-label">'+f.label+'</label>'
+        +'<select id="ef-'+i+'" class="form-control">'
+        +f.options.map(function(o){ return '<option value="'+o+'"'+(o===f.val?' selected':'')+'>'+o+'</option>'; }).join('')
+        +'</select></div>';
+    }
+    return '<div class="form-group"><label class="form-label">'+f.label+'</label>'
+      +'<input type="'+f.type+'" id="ef-'+i+'" class="form-control" value="'+escH(f.val)+'"></div>';
+  }).join('');
+  document.getElementById('edit-modal').style.display='block';
+}
+
+function closeEditModal(){
+  document.getElementById('edit-modal').style.display='none';
+  _editCtx=null;
+}
+
+async function saveEdit(){
+  if(!checkCreds()||!_editCtx) return;
+  var vals = _editCtx.fieldDefs.map(function(_,i){
+    return document.getElementById('ef-'+i).value.trim();
+  });
+  if(!vals[0]){ toast('名前を入力してください','error'); return; }
+  showLoad();
+  try {
+    var data = await fetchS(_editCtx.sheetName);
+    var idx  = data.findIndex(function(r){ return r[0]===_editCtx.id; });
+    if(idx<0){ toast('対象データが見つかりません','error'); hideLoad(); return; }
+    // B列から一括更新
+    await sheetsWrite(_editCtx.sheetName, 'B'+(idx+2)+':'+String.fromCharCode(65+vals.length)+(idx+2), [vals]);
+    closeEditModal();
+    await load(); toast('更新しました');
+  } catch(e){ toast('更新エラー: '+e.message,'error'); }
   hideLoad();
 }
 
