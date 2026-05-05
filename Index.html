@@ -192,9 +192,15 @@ body {
       <label class="form-label">スプレッドシートID <span style="font-weight:400;font-size:12px;color:var(--text-muted)">（URLをそのまま貼ってもOK）</span></label>
       <input type="text" id="cfg-id" class="form-control" placeholder="スプレッドシートのIDまたはURL">
     </div>
-    <div class="form-group">
-      <label class="form-label">APIキー</label>
-      <input type="password" id="cfg-key" class="form-control" placeholder="Google APIキー">
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">APIキー</label>
+        <input type="password" id="cfg-key" class="form-control" placeholder="Google APIキー">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Googleアカウント <span style="font-weight:400;font-size:12px;color:var(--text-muted)">（自動ログイン用）</span></label>
+        <input type="email" id="cfg-email" class="form-control" placeholder="example@gmail.com">
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px">
       <button class="btn btn-primary" style="flex:1" onclick="saveCfg()">💾 設定保存</button>
@@ -237,7 +243,21 @@ body {
     <div class="card">
       <div class="grid-2" style="margin-bottom:8px">
         <input type="text" id="new-m" class="form-control" placeholder="資材名">
-        <input type="text" id="new-m-unit" class="form-control" placeholder="単位（例：本、袋）">
+        <select id="new-m-unit" class="form-control">
+          <option value="">単位を選択</option>
+          <option value="kg">kg</option>
+          <option value="g">g</option>
+          <option value="L">L（リットル）</option>
+          <option value="mL">mL</option>
+          <option value="袋">袋</option>
+          <option value="本">本</option>
+          <option value="個">個</option>
+          <option value="枚">枚</option>
+          <option value="箱">箱</option>
+          <option value="束">束</option>
+          <option value="m">m（メートル）</option>
+          <option value="cm">cm</option>
+        </select>
       </div>
       <div style="display:flex;gap:5px;margin-bottom:8px;align-items:center">
         <input type="number" id="new-m-bag" class="form-control" placeholder="1袋の量" min="0" step="0.01" style="flex:1">
@@ -268,7 +288,7 @@ body {
 // ============================================================
 // 設定・状態
 // ============================================================
-var cfg = { id:'', key:'', cid:'537512390859-n7u9s1jrtqusmh5kqr57lbs52lsqalg8.apps.googleusercontent.com' };
+var cfg = { id:'', key:'', cid:'537512390859-n7u9s1jrtqusmh5kqr57lbs52lsqalg8.apps.googleusercontent.com', email:'' };
 var state = { fields:[], wts:[], mats:[], mapping:[], inv:[], diary:[] };
 var timer = { sec:0, iv:null };
 var images = [];
@@ -314,10 +334,12 @@ function switchMTab(id, el){
 // ============================================================
 window.onload = function(){
   try {
-    cfg.id  = localStorage.getItem('agri_id')  || '';
-    cfg.key = localStorage.getItem('agri_key') || '';
-    document.getElementById('cfg-id').value  = cfg.id;
-    document.getElementById('cfg-key').value = cfg.key;
+    cfg.id    = localStorage.getItem('agri_id')    || '';
+    cfg.key   = localStorage.getItem('agri_key')   || '';
+    cfg.email = localStorage.getItem('agri_email') || '';
+    document.getElementById('cfg-id').value    = cfg.id;
+    document.getElementById('cfg-key').value   = cfg.key;
+    document.getElementById('cfg-email').value = cfg.email;
     document.getElementById('d-date').value = new Date().toISOString().split('T')[0];
     document.getElementById('a-date').value = new Date().toISOString().split('T')[0];
 
@@ -410,7 +432,7 @@ function updateAuthStatus(){
 function initGis(){
   if(typeof google !== 'undefined' && cfg.cid && !tokenClient){
     try {
-      tokenClient = google.accounts.oauth2.initTokenClient({
+      var clientConfig = {
         client_id: cfg.cid,
         scope: 'https://www.googleapis.com/auth/spreadsheets',
         callback: function(resp){
@@ -425,7 +447,9 @@ function initGis(){
           if(_reAuthCallback){ var cb=_reAuthCallback; _reAuthCallback=null; cb(); }
           else { toast('ログイン成功 ✅'); load(); }
         }
-      });
+      };
+      if(cfg.email) clientConfig.hint = cfg.email;
+      tokenClient = google.accounts.oauth2.initTokenClient(clientConfig);
     } catch(e){ console.error('GIS init error:', e); }
   }
 }
@@ -917,7 +941,7 @@ function openEdit(sheetName, id){
     if(!item) return;
     fieldDefs = [
       {label:'資材名', val:item[1]||'', type:'text'},
-      {label:'単位（例：本、袋）', val:item[2]||'', type:'text'},
+      {label:'単位', val:item[2]||'', type:'select', options:['','kg','g','L','mL','袋','本','個','枚','箱','束','m','cm']},
       {label:'1袋の量 (kg)', val:item[3]||'', type:'number'}
     ];
   } else return;
@@ -987,12 +1011,15 @@ function saveCfg(){
   var raw = document.getElementById('cfg-id').value.trim();
   var m = raw.match(/\/spreadsheets\/d\/([\w-]+)/);
   cfg.id  = m ? m[1] : raw;
-  cfg.key = document.getElementById('cfg-key').value.trim();
-  localStorage.setItem('agri_id',  cfg.id);
-  localStorage.setItem('agri_key', cfg.key);
+  cfg.key   = document.getElementById('cfg-key').value.trim();
+  cfg.email = document.getElementById('cfg-email').value.trim();
+  localStorage.setItem('agri_id',    cfg.id);
+  localStorage.setItem('agri_key',   cfg.key);
+  localStorage.setItem('agri_email', cfg.email);
   // 表示をIDだけに更新
   document.getElementById('cfg-id').value = cfg.id;
-  // GIS未初期化なら初期化（ログイン状態は維持）
+  // アカウントが変わった場合はGISを再初期化
+  tokenClient = null;
   initGis();
   toast('設定を保存しました');
   updateAuthStatus();
